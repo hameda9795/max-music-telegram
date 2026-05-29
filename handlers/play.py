@@ -126,6 +126,7 @@ def register(app: Client, factory: GroupCallFactory) -> None:
 
     @app.on_message(filters.group & filters.text & _command_filter)
     async def _on_command(client: Client, message: Message) -> None:
+        logger.info("CMD from %s: %r", message.chat.id, (message.text or "")[:60])
         text = (message.text or "").strip()
         if _PLAY_RE.match(text):
             await _play(client, message, manager)
