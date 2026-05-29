@@ -1,15 +1,3 @@
-"""
-Play handler -- uses pytgcalls GroupCallFactory API (MarshalX, v3.0.0.dev).
-
-Exported API of the installed package:
-  GroupCallFactory(client)            -- factory bound to an MTProto client
-  factory.get_file_group_call(path)   -- creates a GroupCallFileAction instance
-  call.start(chat_id)                 -- join voice chat and begin playback
-  call.stop()                         -- leave voice chat
-  call.input_filename = path          -- hot-swap the playing file
-  @call.on_playout_ended              -- fired when the current file finishes
-"""
-
 import logging
 import os
 import re
@@ -17,7 +5,8 @@ from typing import Optional
 
 from pyrogram import Client, filters, ContinuePropagation
 from pyrogram.types import Message
-from pytgcalls import GroupCallFactory
+from pytgcalls import PyTgCalls
+from pytgcalls.types import MediaStream
 
 from utils.queue import Track, queue
 from utils import ytdl
@@ -52,52 +41,40 @@ _command_filter = filters.create(_command_filter_func)
 
 
 class CallManager:
-    """Manages one GroupCallFileAction instance per active chat."""
-
-    def __init__(self, app: Client, factory: GroupCallFactory) -> None:
+    def __init__(self, app: Client, call_client: PyTgCalls) -> None:
         self._app = app
-        self._factory = factory
-        self._calls: dict = {}
+        self._call = call_client
+        self._active: set[int] = set()
 
     def is_active(self, chat_id: int) -> bool:
-        return chat_id in self._calls
+        return chat_id in self._active
 
     async def join_and_play(self, chat_id: int, file_path: str) -> None:
-        if chat_id in self._calls:
-            self._calls[chat_id].input_filename = file_path
-        else:
-            call = self._factory.get_file_group_call(file_path)
-            self._calls[chat_id] = call
-
-            @call.on_playout_ended
-            async def _on_ended(context, source):
-                await self._advance_queue(chat_id)
-
-            await call.start(chat_id)
+        await self._call.play(chat_id, MediaStream(file_path))
+        self._active.add(chat_id)
 
     async def change_stream(self, chat_id: int, file_path: str) -> bool:
-        if chat_id not in self._calls:
+        if chat_id not in self._active:
             return False
-        self._calls[chat_id].input_filename = file_path
+        await self._call.play(chat_id, MediaStream(file_path))
         return True
 
     async def leave(self, chat_id: int) -> None:
-        if chat_id in self._calls:
-            try:
-                await self._calls[chat_id].stop()
-            except Exception:
-                pass
-            del self._calls[chat_id]
+        self._active.discard(chat_id)
+        try:
+            await self._call.leave_group_call(chat_id)
+        except Exception:
+            pass
 
     async def _advance_queue(self, chat_id: int) -> None:
         next_track = queue.dequeue(chat_id)
         if next_track:
             try:
-                self._calls[chat_id].input_filename = next_track.path
+                await self._call.play(chat_id, MediaStream(next_track.path))
                 dur = _fmt_duration(next_track.duration)
                 await self._app.send_message(
                     chat_id,
-                    f"*{next_track.title}*"
+                    f"**{next_track.title}**"
                     + (f"\n{dur}" if dur else "")
                     + f"\n{next_track.requested_by}",
                 )
@@ -111,8 +88,13 @@ class CallManager:
                 pass
 
 
-def register(app: Client, factory: GroupCallFactory) -> None:
-    manager = CallManager(app, factory)
+def register(app: Client, call_client: PyTgCalls) -> None:
+    manager = CallManager(app, call_client)
+
+    @call_client.on_stream_end()
+    async def _on_stream_end(_, update) -> None:
+        manager._active.discard(update.chat_id)
+        await manager._advance_queue(update.chat_id)
 
     @app.on_message(filters.command("ping"))
     async def _ping(client: Client, message: Message) -> None:
@@ -209,7 +191,7 @@ async def _enqueue_and_play(manager, message, chat_id, track, status_msg) -> Non
             queue.clear(chat_id)
             logger.error("join_and_play error in chat %s: %s", chat_id, exc)
             err = str(exc).lower()
-            if any(k in err for k in ("no active", "not found", "not started")):
+            if any(k in err for k in ("no active", "not found", "not started", "group call")):
                 await status_msg.edit(
                     "هیچ ویدیو کالی فعال نیست.\n"
                     "لطفا ابتدا یک ویدیو کال در گروه شروع کنید."
