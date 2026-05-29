@@ -20,11 +20,10 @@ app = Client(
     workdir="sessions",
 )
 
-factory = GroupCallFactory(app)
-register(app, factory)
-
 
 async def main() -> None:
+    factory = GroupCallFactory(app)
+    register(app, factory)
     await app.start()
     logging.info("Bot started successfully.")
     await idle()
