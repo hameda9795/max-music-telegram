@@ -16,7 +16,7 @@ import os
 import re
 from typing import Optional
 
-from pyrogram import Client, filters
+from pyrogram import Client, filters, ContinuePropagation
 from pyrogram.types import Message
 from pytgcalls import GroupCallFactory
 
@@ -123,16 +123,10 @@ def register(app: Client, factory: GroupCallFactory) -> None:
     async def _debug_log(client: Client, message: Message) -> None:
         text = (message.text or message.caption or "").strip()
         logger.info("MSG chat=%s type=%s text=%r", message.chat.id, message.chat.type, text[:80])
-
-    @app.on_message(filters.group & filters.text)
-    async def _group_text_test(client: Client, message: Message) -> None:
-        text = (message.text or "").strip()
-        matched = bool(_PLAY_RE.match(text) or _STOP_RE.match(text) or _SKIP_RE.match(text))
-        logger.info("GROUP_TEXT chat=%s text=%r filter_match=%s", message.chat.id, text[:40], matched)
+        raise ContinuePropagation
 
     @app.on_message(filters.group & filters.text & _command_filter)
     async def _on_command(client: Client, message: Message) -> None:
-        logger.info("CMD from %s: %r", message.chat.id, (message.text or "")[:60])
         text = (message.text or "").strip()
         if _PLAY_RE.match(text):
             await _play(client, message, manager)
