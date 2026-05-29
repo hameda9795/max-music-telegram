@@ -5,8 +5,8 @@ from typing import Optional
 
 from pyrogram import Client, filters, ContinuePropagation
 from pyrogram.types import Message
-from pytgcalls import PyTgCalls
-from pytgcalls.types import MediaStream
+from pytgcalls import GroupCallFactory
+from pytgcalls.types.input_stream import InputAudioFile
 
 from utils.queue import Track, queue
 from utils import ytdl
@@ -41,36 +41,46 @@ _command_filter = filters.create(_command_filter_func)
 
 
 class CallManager:
-    def __init__(self, app: Client, call_client: PyTgCalls) -> None:
+    def __init__(self, app: Client, factory: GroupCallFactory) -> None:
         self._app = app
-        self._call = call_client
-        self._active: set[int] = set()
+        self._factory = factory
+        self._calls: dict = {}
 
     def is_active(self, chat_id: int) -> bool:
-        return chat_id in self._active
+        return chat_id in self._calls
 
     async def join_and_play(self, chat_id: int, file_path: str) -> None:
-        await self._call.play(chat_id, MediaStream(file_path))
-        self._active.add(chat_id)
+        if chat_id in self._calls:
+            self._calls[chat_id].input_filename = file_path
+        else:
+            call = self._factory.get_file_group_call(file_path)
+            self._calls[chat_id] = call
+
+            @call.on_playout_ended
+            async def _on_ended(context, source):
+                await self._advance_queue(chat_id)
+
+            await call.start(chat_id)
 
     async def change_stream(self, chat_id: int, file_path: str) -> bool:
-        if chat_id not in self._active:
+        if chat_id not in self._calls:
             return False
-        await self._call.play(chat_id, MediaStream(file_path))
+        self._calls[chat_id].input_filename = file_path
         return True
 
     async def leave(self, chat_id: int) -> None:
-        self._active.discard(chat_id)
-        try:
-            await self._call.leave_group_call(chat_id)
-        except Exception:
-            pass
+        if chat_id in self._calls:
+            try:
+                await self._calls[chat_id].stop()
+            except Exception:
+                pass
+            del self._calls[chat_id]
 
     async def _advance_queue(self, chat_id: int) -> None:
         next_track = queue.dequeue(chat_id)
         if next_track:
             try:
-                await self._call.play(chat_id, MediaStream(next_track.path))
+                self._calls[chat_id].input_filename = next_track.path
                 dur = _fmt_duration(next_track.duration)
                 await self._app.send_message(
                     chat_id,
@@ -88,13 +98,8 @@ class CallManager:
                 pass
 
 
-def register(app: Client, call_client: PyTgCalls) -> None:
-    manager = CallManager(app, call_client)
-
-    @call_client.on_stream_end()
-    async def _on_stream_end(_, update) -> None:
-        manager._active.discard(update.chat_id)
-        await manager._advance_queue(update.chat_id)
+def register(app: Client, factory: GroupCallFactory) -> None:
+    manager = CallManager(app, factory)
 
     @app.on_message(filters.command("ping"))
     async def _ping(client: Client, message: Message) -> None:
