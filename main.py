@@ -1,7 +1,6 @@
-import asyncio
 import logging
 
-from pyrogram import Client, idle
+from pyrogram import Client
 from pytgcalls import GroupCallFactory
 
 from config import API_ID, API_HASH, BOT_TOKEN
@@ -20,14 +19,8 @@ app = Client(
     workdir="sessions",
 )
 
+factory = GroupCallFactory(app)
+register(app, factory)
 
-async def main() -> None:
-    factory = GroupCallFactory(app)
-    register(app, factory)
-    await app.start()
-    logging.info("Bot started successfully.")
-    await idle()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+logging.info("Bot started successfully.")
+app.run()
