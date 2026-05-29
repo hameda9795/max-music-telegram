@@ -10,9 +10,6 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Debug: show exactly what pytgcalls exposes so we can fix imports
-RUN python -c "import pytgcalls; print('=== pytgcalls exports ==='); print(dir(pytgcalls)); print('=== __init__.py ==='); print(open(pytgcalls.__file__).read())"
-
 COPY . .
 
 # Ensure required directories exist
