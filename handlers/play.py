@@ -119,10 +119,10 @@ def register(app: Client, factory: GroupCallFactory) -> None:
     async def _ping(client: Client, message: Message) -> None:
         await message.reply("pong! ربات فعال است.")
 
-    @app.on_message(filters.group & filters.text)
+    @app.on_message()
     async def _debug_log(client: Client, message: Message) -> None:
-        text = (message.text or "").strip()
-        logger.info("MSG received chat=%s text=%r", message.chat.id, text[:80])
+        text = (message.text or message.caption or "").strip()
+        logger.info("MSG chat=%s type=%s text=%r", message.chat.id, message.chat.type, text[:80])
 
     @app.on_message(filters.group & filters.text & _command_filter)
     async def _on_command(client: Client, message: Message) -> None:
