@@ -1,9 +1,10 @@
 import logging
+import asyncio
 
-from pyrogram import Client
+from pyrogram import Client, idle
 from pytgcalls import GroupCallFactory
 
-from config import API_ID, API_HASH, BOT_TOKEN
+from config import API_ID, API_HASH, BOT_TOKEN, PHONE, USER_SESSION
 from handlers.play import register
 
 logging.basicConfig(
@@ -11,7 +12,8 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 
-app = Client(
+# Bot: receives commands and sends messages
+bot = Client(
     "MusicBot",
     api_id=API_ID,
     api_hash=API_HASH,
@@ -19,8 +21,31 @@ app = Client(
     workdir="sessions",
 )
 
-factory = GroupCallFactory(app)
-register(app, factory)
+# User account: joins voice chat (session string from setup_session.py)
+user = Client(
+    ":memory:",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    session_string=USER_SESSION,
+)
 
-logging.info("Bot started successfully.")
-app.run()
+factory = GroupCallFactory(user)
+register(bot, factory)
+
+
+async def main() -> None:
+    await user.start()
+    me = await user.get_me()
+    logging.info("User client ready: %s (@%s)", me.first_name, me.username)
+
+    await bot.start()
+    logging.info("Bot started successfully.")
+
+    await idle()
+
+    await bot.stop()
+    await user.stop()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
