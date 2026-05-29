@@ -120,9 +120,7 @@ def register(app: Client, factory: GroupCallFactory) -> None:
         await message.reply("pong! ربات فعال است.")
 
     @app.on_message()
-    async def _debug_log(client: Client, message: Message) -> None:
-        text = (message.text or message.caption or "").strip()
-        logger.info("MSG chat=%s type=%s text=%r", message.chat.id, message.chat.type, text[:80])
+    async def _pass_through(client: Client, message: Message) -> None:
         raise ContinuePropagation
 
     @app.on_message(filters.group & filters.text & _command_filter)
