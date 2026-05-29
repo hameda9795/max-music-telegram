@@ -208,6 +208,7 @@ async def _enqueue_and_play(manager, message, chat_id, track, status_msg) -> Non
             )
         except Exception as exc:
             queue.clear(chat_id)
+            logger.error("join_and_play error in chat %s: %s", chat_id, exc)
             err = str(exc).lower()
             if any(k in err for k in ("no active", "not found", "not started")):
                 await status_msg.edit(
@@ -215,7 +216,6 @@ async def _enqueue_and_play(manager, message, chat_id, track, status_msg) -> Non
                     "لطفا ابتدا یک ویدیو کال در گروه شروع کنید."
                 )
             else:
-                logger.error("join_and_play error in chat %s: %s", chat_id, exc)
                 await status_msg.edit(f"خطا در اتصال به ویدیو کال: {exc}")
     else:
         pos = len(queue.list_queue(chat_id))
