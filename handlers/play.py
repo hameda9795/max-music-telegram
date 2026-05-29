@@ -10,7 +10,6 @@ Exported API of the installed package:
   @call.on_playout_ended              -- fired when the current file finishes
 """
 
-import asyncio
 import logging
 import os
 import re
@@ -71,8 +70,8 @@ class CallManager:
             self._calls[chat_id] = call
 
             @call.on_playout_ended
-            def _on_ended(context, source):
-                asyncio.ensure_future(self._advance_queue(chat_id))
+            async def _on_ended(context, source):
+                await self._advance_queue(chat_id)
 
             await call.start(chat_id)
 
