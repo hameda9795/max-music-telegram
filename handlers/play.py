@@ -6,7 +6,6 @@ from typing import Optional
 from pyrogram import Client, filters, ContinuePropagation
 from pyrogram.types import Message
 from pytgcalls import GroupCallFactory
-from pytgcalls.types.input_stream import InputAudioFile
 
 from utils.queue import Track, queue
 from utils import ytdl
